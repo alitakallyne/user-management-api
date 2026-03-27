@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.alita.usermanagement.config.TokenConfig;
 import com.alita.usermanagement.infrastructure.dto.request.LoginRequest;
 import com.alita.usermanagement.infrastructure.dto.request.RegisterUserRequest;
 import com.alita.usermanagement.infrastructure.dto.response.LoginResponse;
@@ -28,12 +29,13 @@ public class AuthController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final TokenConfig tokenConfig;
 
-
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager) {
+    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenConfig tokenConfig) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
+        this.tokenConfig = tokenConfig;
     }
 
     @GetMapping("/teste")
@@ -46,7 +48,9 @@ public class AuthController {
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(request.email(), request.password());
         Authentication authentication = authenticationManager.authenticate(authToken);
 
-        return null;
+       User user = (User) authentication.getPrincipal();
+       String token = tokenConfig.generateToken(user);
+       return ResponseEntity.ok(new LoginResponse(token));
     }
 
     @PostMapping("/register")
