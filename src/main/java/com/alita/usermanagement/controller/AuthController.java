@@ -23,10 +23,17 @@ import com.alita.usermanagement.infrastructure.entity.Role;
 import com.alita.usermanagement.infrastructure.entity.User;
 import com.alita.usermanagement.infrastructure.repository.UserRepository;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/auth")
+@Tag(name = "Autenticação")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -46,6 +53,16 @@ public class AuthController {
         return "Testando segurança";
     }
 
+    @Operation(
+        summary = "Realizar login",
+        description = "Autentica o usuário e retorna um token JWT"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Login realizado com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Credenciais inválidas"),
+        @ApiResponse(responseCode = "500", description = "Erro interno")
+    })
+
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(request.email(), request.password());
@@ -56,6 +73,17 @@ public class AuthController {
        return ResponseEntity.ok(new LoginResponse(token));
     }
 
+     @Operation(
+        summary = "Registrar novo usuário",
+        description = "Cria um novo usuário no sistema com role padrão USER"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Usuário criado com sucesso",
+            content = @Content(schema = @Schema(implementation = RegisterUserResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+        @ApiResponse(responseCode = "409", description = "Usuário já existente"),
+        @ApiResponse(responseCode = "500", description = "Erro interno")
+    })
     @PostMapping("/register")
     public ResponseEntity<RegisterUserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
         User newUser = new User();
