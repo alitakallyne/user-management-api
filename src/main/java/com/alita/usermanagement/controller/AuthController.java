@@ -1,5 +1,7 @@
 package com.alita.usermanagement.controller;
 
+import java.util.Set;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +19,7 @@ import com.alita.usermanagement.infrastructure.dto.request.LoginRequest;
 import com.alita.usermanagement.infrastructure.dto.request.RegisterUserRequest;
 import com.alita.usermanagement.infrastructure.dto.response.LoginResponse;
 import com.alita.usermanagement.infrastructure.dto.response.RegisterUserResponse;
+import com.alita.usermanagement.infrastructure.entity.Role;
 import com.alita.usermanagement.infrastructure.entity.User;
 import com.alita.usermanagement.infrastructure.repository.UserRepository;
 
@@ -59,6 +62,12 @@ public class AuthController {
         newUser.setName(request.name());
         newUser.setEmail(request.email());
         newUser.setPassword(passwordEncoder.encode(request.password()));
+
+        if(request.role() != null) {
+            newUser.setRoles(Set.of(request.role()));
+        } else {
+            newUser.setRoles(Set.of(Role.ROLE_USER));
+        }
 
         userRepository.save(newUser);
 

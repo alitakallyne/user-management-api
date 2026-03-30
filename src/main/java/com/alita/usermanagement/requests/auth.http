@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJzdWIiOiJhbGl0YUBlbWFpbC5jb20iLCJleHAiOjE4NjEyNzgyMDUsImlhdCI6MTc3NDg3ODIwNX0.qb6iPDOnMWuBQONoSrim_XSjAzLCkNaFiA4rLuakhY4
+
+### 🔐 Registrar USER
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "João",
+  "email": "joao@gmail.com",
+  "password": "123456"
+}
+
+###
+
+### 👑 Registrar ADMIN (DEV)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Maria Admin",
+  "email": "maria@gmail.com",
+  "password": "123456",
+  "role": "ROLE_ADMIN"
+}
+
+###
+
+### 🔑 Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "joao@gmail.com",
+  "password": "123456"
+}
+
+###
+
+### 👤 USER dashboard
+GET {{baseUrl}}/user/dashboard
+Authorization: Bearer {{token}}
+
+###
+
+### 👑 ADMIN panel
+GET {{baseUrl}}/admin/panel
+Authorization: Bearer {{token}}
