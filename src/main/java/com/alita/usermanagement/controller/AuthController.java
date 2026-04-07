@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -26,11 +28,14 @@ import com.alita.usermanagement.infrastructure.dto.request.RefreshRequest;
 import com.alita.usermanagement.infrastructure.dto.request.RegisterUserRequest;
 import com.alita.usermanagement.infrastructure.dto.response.LoginResponse;
 import com.alita.usermanagement.infrastructure.dto.response.RegisterUserResponse;
+import com.alita.usermanagement.infrastructure.entity.EmailVerificationToken;
 import com.alita.usermanagement.infrastructure.entity.RefreshToken;
 import com.alita.usermanagement.infrastructure.entity.Role;
 import com.alita.usermanagement.infrastructure.entity.User;
+import com.alita.usermanagement.infrastructure.repository.EmailVerificationTokenRepository;
 import com.alita.usermanagement.infrastructure.repository.RefreshTokenRepository;
 import com.alita.usermanagement.infrastructure.repository.UserRepository;
+import com.alita.usermanagement.service.EmailService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -51,15 +56,20 @@ public class AuthController {
     private final TokenConfig tokenConfig;
     private final RefreshTokenRepository refreshTokenRepository;
     private final Map<String, Integer> attempts = new ConcurrentHashMap<>();
+    private final EmailService emailService;
+    private final EmailVerificationTokenRepository tokenRepository;
 
     public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager, TokenConfig tokenConfig,
-            RefreshTokenRepository refreshTokenRepository) {
+            RefreshTokenRepository refreshTokenRepository, EmailService emailService,
+            EmailVerificationTokenRepository tokenRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokenConfig = tokenConfig;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.emailService = emailService;
+        this.tokenRepository = tokenRepository;
     }
 
     @GetMapping("/teste")
@@ -76,7 +86,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        
+
         attempts.put(request.email(), attempts.getOrDefault(request.email(), 0) + 1);
         if (attempts.get(request.email()) > 5) {
             throw new RuntimeException("Muitas tentativas. Tente novamente mais tarde.");
@@ -132,7 +142,7 @@ public class AuthController {
         User newUser = new User();
         newUser.setName(request.name());
         newUser.setEmail(request.email());
-        newUser.setVerified(true);
+        newUser.setVerified(false);
         newUser.setPassword(passwordEncoder.encode(request.password()));
 
         if (request.role() != null) {
@@ -143,44 +153,74 @@ public class AuthController {
 
         userRepository.save(newUser);
 
+        String rawToken = UUID.randomUUID().toString();
+        String hashedToken = passwordEncoder.encode(rawToken);
+
+        EmailVerificationToken token = new EmailVerificationToken();
+        token.setToken(hashedToken);
+        token.setUser(newUser);
+        token.setExpiresAt(LocalDateTime.now().plusHours(24));
+
+        tokenRepository.save(token);
+
+        emailService.sendVerificationEmail(newUser.getEmail(), rawToken);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new RegisterUserResponse(newUser.getName(), newUser.getEmail()));
     }
 
     @PostMapping("/refresh")
-public ResponseEntity<LoginResponse> refresh(@RequestBody RefreshRequest request) {
+    public ResponseEntity<LoginResponse> refresh(@RequestBody RefreshRequest request) {
 
-    List<RefreshToken> tokens = refreshTokenRepository.findAll();
+        List<RefreshToken> tokens = refreshTokenRepository.findAll();
 
-    RefreshToken validToken = tokens.stream()
-        .filter(t -> passwordEncoder.matches(request.refreshToken(), t.getToken()))
-        .findFirst()
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token inválido"));
+        RefreshToken validToken = tokens.stream()
+                .filter(t -> passwordEncoder.matches(request.refreshToken(), t.getToken()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token inválido"));
 
-    if (validToken.isRevoked() || validToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token expirado");
+        if (validToken.isRevoked() || validToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token expirado");
+        }
+
+        User user = validToken.getUser();
+
+        validToken.setRevoked(true);
+        refreshTokenRepository.save(validToken);
+
+        String newAccessToken = tokenConfig.generateToken(user);
+        String newRefreshTokenRaw = tokenConfig.generateRefreshToken();
+
+        RefreshToken newToken = new RefreshToken();
+        newToken.setUser(user);
+        newToken.setToken(passwordEncoder.encode(newRefreshTokenRaw));
+        newToken.setExpiresAt(LocalDateTime.now().plusDays(7));
+        newToken.setRevoked(false);
+
+        refreshTokenRepository.save(newToken);
+
+        return ResponseEntity.ok(
+                new LoginResponse(newAccessToken, newRefreshTokenRaw, "Bearer"));
     }
 
-    User user = validToken.getUser();
+    @GetMapping("/verify-email")
+    public ResponseEntity<String> verifyEmail(@RequestParam String token) {
 
-   
-    validToken.setRevoked(true);
-    refreshTokenRepository.save(validToken);
+        List<EmailVerificationToken> tokens = tokenRepository.findAll();
 
-  
-    String newAccessToken = tokenConfig.generateToken(user);
-    String newRefreshTokenRaw = tokenConfig.generateRefreshToken();
+        EmailVerificationToken validToken = tokens.stream()
+                .filter(t -> passwordEncoder.matches(token, t.getToken()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token inválido"));
 
-    RefreshToken newToken = new RefreshToken();
-    newToken.setUser(user);
-    newToken.setToken(passwordEncoder.encode(newRefreshTokenRaw));
-    newToken.setExpiresAt(LocalDateTime.now().plusDays(7));
-    newToken.setRevoked(false);
+        if (validToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token expirado");
+        }
 
-    refreshTokenRepository.save(newToken);
+        User user = validToken.getUser();
+        user.setVerified(true);
+        userRepository.save(user);
 
-    return ResponseEntity.ok(
-        new LoginResponse(newAccessToken, newRefreshTokenRaw, "Bearer")
-    );
-}
+        return ResponseEntity.ok("Email verificado com sucesso!");
+    }
 }
