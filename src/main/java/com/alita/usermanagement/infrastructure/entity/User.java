@@ -54,6 +54,8 @@ public class User implements  UserDetails {
     @Column(name = "role")
     private Set<Role> roles = new HashSet<>();
 
+    private boolean isVerified;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return roles.stream()
@@ -63,7 +65,7 @@ public class User implements  UserDetails {
 
     @Override
     public String getUsername() {
-        return "";
+        return this.email;
     }
 
   

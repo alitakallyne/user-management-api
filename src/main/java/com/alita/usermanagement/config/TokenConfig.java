@@ -1,9 +1,11 @@
 package com.alita.usermanagement.config;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
-import java.util.Base64.Decoder;
+import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.alita.usermanagement.infrastructure.entity.User;
@@ -16,7 +18,8 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 @Component
 public class TokenConfig {
 
-    private String secret = "mysecretkey";
+    @Value("${jwt.secret}")
+    private String secret;
     
 
     public String generateToken(User user) {
@@ -26,7 +29,7 @@ public class TokenConfig {
             .withClaim("userId", user.getId())
             .withClaim("roles", user.getRoles().stream().map(Enum::name).toList())
             .withSubject(user.getEmail())
-            .withExpiresAt(Instant.now().plusSeconds(86400000)) // 1 day expiration
+            .withExpiresAt(Instant.now().plus(15, ChronoUnit.MINUTES))
             .withIssuedAt(Instant.now())
             .sign(algorithm);
     }
@@ -50,6 +53,11 @@ public class TokenConfig {
 
        
 
+    }
+
+
+    public String generateRefreshToken() {
+         return UUID.randomUUID().toString();
     }
     
 
