@@ -15,4 +15,14 @@ public class EmailService {
         System.out.println("Link: " + link);
         System.out.println("==================================");
     }
+
+    public void sendPasswordResetEmail(String email, String token) {
+        String link = "http://localhost:8080/api/auth/reset-password?token=" + token;
+
+        System.out.println("==================================");
+        System.out.println("RECUPERAÇÃO DE SENHA (SIMULADO)");
+        System.out.println("Para: " + email);
+        System.out.println("Link: " + link);
+        System.out.println("==================================");
+    }
 }

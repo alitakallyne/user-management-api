@@ -1,48 +1,198 @@
 @baseUrl = http://localhost:8080/api
 @token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJzdWIiOiJhbGl0YUBlbWFpbC5jb20iLCJleHAiOjE4NjEyNzgyMDUsImlhdCI6MTc3NDg3ODIwNX0.qb6iPDOnMWuBQONoSrim_XSjAzLCkNaFiA4rLuakhY4
 
+@baseUrl = http://localhost:8080/api
+
+############################################
+
+### 🔐 AUTH - REGISTRO E LOGIN
+
+############################################
+
 ### 🔐 Registrar USER
+
 POST {{baseUrl}}/auth/register
 Content-Type: application/json
 
 {
-  "name": "João",
-  "email": "joao@gmail.com",
-  "password": "123456"
+"name": "João",
+"email": "joao@gmail.com",
+"password": "123456"
 }
 
 ###
 
 ### 👑 Registrar ADMIN (DEV)
+
 POST {{baseUrl}}/auth/register
 Content-Type: application/json
 
 {
-  "name": "Maria Admin",
-  "email": "maria@gmail.com",
-  "password": "123456",
-  "role": "ROLE_ADMIN"
+"name": "Maria Admin",
+"email": "[maria@gmail.com](mailto:maria@gmail.com)",
+"password": "123456",
+"role": "ROLE_ADMIN"
 }
 
 ###
 
-### 🔑 Login
+### 🔑 Login (USER)
+
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "joao@gmail.com",
-  "password": "123456"
+"email": "joao@gmail.com",
+"password": "123456"
 }
 
 ###
 
+### ⚠️ Salvar token manualmente após login
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJzdWIiOiJqb2FvQGdtYWlsLmNvbSIsImV4cCI6MTc3NTY3MDcxNCwiaWF0IjoxNzc1NjY5ODE0fQ.LMYu2RzrK6qYt9mt-4w__XaVxsj5lTab143e-38VO54
+
+###
+
 ### 👤 USER dashboard
+
 GET {{baseUrl}}/user/dashboard
 Authorization: Bearer {{token}}
 
 ###
 
 ### 👑 ADMIN panel
+
 GET {{baseUrl}}/admin/panel
 Authorization: Bearer {{token}}
+
+###
+
+############################################
+
+### 🔁 RESET DE SENHA
+
+############################################
+
+### 📩 Solicitar reset de senha
+
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)"
+}
+
+###
+
+### ❌ Reset com email inexistente (não deve revelar)
+
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+"email": "joao@gmail.com"
+}
+
+###
+
+### ⚠️ Cole aqui o token recebido no email/log
+
+@resetToken = 1d66618c-307d-4e82-bb12-df60bebab261
+
+###
+
+### 🔐 Criar nova senha
+
+POST {{baseUrl}}/auth/new-password?token={{resetToken}}&newPassword=654321
+
+###
+
+### ❌ Token inválido
+
+POST {{baseUrl}}/auth/new-password?token=token_invalido&newPassword=123456
+
+###
+
+### ⏱️ Token expirado (simular alterando no banco)
+
+POST {{baseUrl}}/auth/new-password?token={{resetToken}}&newPassword=123456
+
+###
+
+### 🔥 Reutilizar token (deve falhar)
+
+POST {{baseUrl}}/auth/new-password?token={{resetToken}}&newPassword=999999
+
+###
+
+############################################
+
+### 🔐 TESTES DE LOGIN APÓS RESET
+
+############################################
+
+### 🔑 Login com nova senha
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)",
+"password": "654321"
+}
+
+###
+
+### ❌ Login com senha antiga (deve falhar)
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)",
+"password": "123456"
+}
+
+###
+
+############################################
+
+### 🚀 TESTES AVANÇADOS (OPCIONAL)
+
+############################################
+
+### 🔁 Múltiplos pedidos de reset
+
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)"
+}
+
+###
+
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)"
+}
+
+###
+
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+"email": "[joao@gmail.com](mailto:joao@gmail.com)"
+}
+
+###
+
+### 🔐 Testar senha fraca (se tiver validação)
+
+POST {{baseUrl}}/auth/new-password?token={{resetToken}}&newPassword=123
+
+###

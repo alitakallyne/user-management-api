@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.hibernate.Remove;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,13 +27,16 @@ import com.alita.usermanagement.config.TokenConfig;
 import com.alita.usermanagement.infrastructure.dto.request.LoginRequest;
 import com.alita.usermanagement.infrastructure.dto.request.RefreshRequest;
 import com.alita.usermanagement.infrastructure.dto.request.RegisterUserRequest;
+import com.alita.usermanagement.infrastructure.dto.request.ResetPasswordRequest;
 import com.alita.usermanagement.infrastructure.dto.response.LoginResponse;
 import com.alita.usermanagement.infrastructure.dto.response.RegisterUserResponse;
 import com.alita.usermanagement.infrastructure.entity.EmailVerificationToken;
+import com.alita.usermanagement.infrastructure.entity.PasswordResetToken;
 import com.alita.usermanagement.infrastructure.entity.RefreshToken;
 import com.alita.usermanagement.infrastructure.entity.Role;
 import com.alita.usermanagement.infrastructure.entity.User;
 import com.alita.usermanagement.infrastructure.repository.EmailVerificationTokenRepository;
+import com.alita.usermanagement.infrastructure.repository.PasswordResetTokenRepository;
 import com.alita.usermanagement.infrastructure.repository.RefreshTokenRepository;
 import com.alita.usermanagement.infrastructure.repository.UserRepository;
 import com.alita.usermanagement.service.EmailService;
@@ -58,11 +62,12 @@ public class AuthController {
     private final Map<String, Integer> attempts = new ConcurrentHashMap<>();
     private final EmailService emailService;
     private final EmailVerificationTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager, TokenConfig tokenConfig,
             RefreshTokenRepository refreshTokenRepository, EmailService emailService,
-            EmailVerificationTokenRepository tokenRepository) {
+            EmailVerificationTokenRepository tokenRepository, PasswordResetTokenRepository passwordResetTokenRepository ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -70,6 +75,7 @@ public class AuthController {
         this.refreshTokenRepository = refreshTokenRepository;
         this.emailService = emailService;
         this.tokenRepository = tokenRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     @GetMapping("/teste")
@@ -222,5 +228,53 @@ public class AuthController {
         userRepository.save(user);
 
         return ResponseEntity.ok("Email verificado com sucesso!");
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest  request) {
+        User user = (User) userRepository.findUserByEmail(request.email())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Se o email existir, você receberá instruções"));
+
+        String rawToken = UUID.randomUUID().toString();
+        String hashedToken = passwordEncoder.encode(rawToken);
+
+        PasswordResetToken token = new PasswordResetToken();
+        token.setToken(hashedToken);
+        token.setUser(user);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(30));
+
+        passwordResetTokenRepository.save(token);
+
+        emailService.sendPasswordResetEmail(
+                user.getEmail(),
+                 rawToken);
+
+        return ResponseEntity.ok("Se o email existir, você receberá instruções");
+    }
+
+    @PostMapping("/new-password")
+    public ResponseEntity<?> newPassword(@RequestParam String token, @RequestParam String newPassword) {
+        System.out.println("CHEGUEI NO NEW PASSWORD");
+        List<PasswordResetToken> tokens = passwordResetTokenRepository.findAll();
+
+        PasswordResetToken validToken = tokens.stream()
+                .filter(t -> passwordEncoder.matches(token, t.getToken()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token inválido"));
+        System.out.println("CHEGUEI NO NEW PASSWORD");
+        if (validToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token expirado");
+        }
+
+        System.out.println("CHEGUEI NO NEW PASSWORD 2");
+        User user = validToken.getUser();
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        passwordResetTokenRepository.delete(validToken);
+
+        return ResponseEntity.ok("Senha atualizada com sucesso!");
+        
     }
 }
